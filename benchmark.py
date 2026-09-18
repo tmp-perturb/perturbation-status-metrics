@@ -43,6 +43,16 @@ def by_parent(paths: list[str]) -> dict[Path, Path]:
     return {Path(path).resolve().parent: Path(path).resolve() for path in paths}
 
 
+def select_paths(groups: list[list[str]], predicate) -> list[str]:
+    """Filter and de-duplicate OB 0.6 collector inputs.
+
+    OB 0.6 passes every output from a referenced stage to each input argument;
+    selection by the declared output id is therefore enforced by filename here.
+    """
+    selected = {str(Path(path).resolve()) for group in groups for path in group if predicate(Path(path))}
+    return sorted(selected)
+
+
 def write_resource_inputs(config: dict[str, Any], root: Path, method_records: dict[tuple[str, str], dict], shared: dict[str, tuple[Path, dict]]) -> None:
     resources = root / "resource_inputs"
     resources.mkdir(parents=True)
@@ -143,13 +153,16 @@ def main() -> None:
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
 
-    h5ads = by_parent(getattr(args, "data.h5ad"))
-    specs = [Path(path).resolve() for path in getattr(args, "data.spec")]
-    shared_bundles = by_parent(getattr(args, "shared_signature.bundle"))
-    shared_manifests = by_parent(getattr(args, "shared_signature.manifest"))
-    results = by_parent(getattr(args, "status_estimation.result"))
-    manifests = by_parent(getattr(args, "status_estimation.manifest"))
-    auxiliaries = by_parent(getattr(args, "status_estimation.aux"))
+    data_groups = [getattr(args, "data.h5ad"), getattr(args, "data.spec")]
+    shared_groups = [getattr(args, "shared_signature.bundle"), getattr(args, "shared_signature.manifest")]
+    method_groups = [getattr(args, "status_estimation.result"), getattr(args, "status_estimation.manifest"), getattr(args, "status_estimation.aux")]
+    h5ads = by_parent(select_paths(data_groups, lambda path: path.suffix == ".h5ad"))
+    specs = [Path(path) for path in select_paths(data_groups, lambda path: path.name.endswith(".spec.json"))]
+    shared_bundles = by_parent(select_paths(shared_groups, lambda path: path.name == "shared_signature.tar.gz"))
+    shared_manifests = by_parent(select_paths(shared_groups, lambda path: path.name == "shared_manifest.json"))
+    results = by_parent(select_paths(method_groups, lambda path: path.name == "status_result.tsv.gz"))
+    manifests = by_parent(select_paths(method_groups, lambda path: path.name == "method_manifest.json"))
+    auxiliaries = by_parent(select_paths(method_groups, lambda path: path.name == "method_aux.tar.gz"))
 
     with tempfile.TemporaryDirectory(prefix="pse-benchmark-") as temp_text:
         root = Path(temp_text)
