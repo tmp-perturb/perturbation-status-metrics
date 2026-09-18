@@ -190,7 +190,10 @@ def main() -> None:
         sys.path.insert(0, str(project / "07_benchmark" / "src"))
         from perturb_status_benchmark.config import load_config
         config = serializable(load_config(Path(first_spec["benchmark_config"])))
-        config["project_root"] = str(root)
+        # Keep the frozen project root because harmonization intentionally uses
+        # its validated Mixscale R helper and environment. All mutable run/output
+        # paths and all data/method inputs below are absolute temporary paths.
+        config["project_root"] = str(project)
         config["output_root"] = str(root / "published")
         config["work_root"] = str(root / "work")
         config["log_root"] = str(root / "logs")
