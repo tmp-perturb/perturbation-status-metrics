@@ -40,7 +40,7 @@ def serializable(value: Any) -> Any:
 
 
 def by_parent(paths: list[str]) -> dict[Path, Path]:
-    return {Path(path).resolve().parent: Path(path).resolve() for path in paths}
+    return {Path(path).absolute().parent: Path(path).absolute() for path in paths}
 
 
 def select_paths(groups: list[list[str]], predicate) -> list[str]:
@@ -49,7 +49,7 @@ def select_paths(groups: list[list[str]], predicate) -> list[str]:
     OB 0.6 passes every output from a referenced stage to each input argument;
     selection by the declared output id is therefore enforced by filename here.
     """
-    selected = {str(Path(path).resolve()) for group in groups for path in group if predicate(Path(path))}
+    selected = {str(Path(path).absolute()) for group in groups for path in group if predicate(Path(path))}
     return sorted(selected)
 
 
