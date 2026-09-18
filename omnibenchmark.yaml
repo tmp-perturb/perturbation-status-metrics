@@ -1,0 +1,2 @@
+entrypoints:
+  default: benchmark.py

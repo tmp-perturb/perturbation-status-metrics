@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: Perturbation Status Metrics Omnibenchmark Module
+message: Please cite this software using these metadata.
+type: software
+authors:
+  - family-names: Liu
+    given-names: Yunzhe
+license: MIT
+version: 0.1.0
