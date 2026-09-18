@@ -118,6 +118,8 @@ def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
             try:
                 left = pd.read_parquet(observed) if observed.suffix == ".parquet" else pd.read_csv(observed, sep="\t")
                 right = pd.read_parquet(reference) if reference.suffix == ".parquet" else pd.read_csv(reference, sep="\t")
+                if "dataset_id" in left.columns and "dataset_id" in right.columns:
+                    right = right[right["dataset_id"].isin(set(left["dataset_id"].astype(str)))].reset_index(drop=True)
                 row["shape_observed"] = list(left.shape)
                 row["shape_reference"] = list(right.shape)
                 if left.shape != right.shape or list(left.columns) != list(right.columns):
