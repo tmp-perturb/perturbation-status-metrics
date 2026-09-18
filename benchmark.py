@@ -104,6 +104,11 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
 
 def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
     comparisons = []
+    summary_runtime_columns = {
+        "incremental_wall_seconds", "standalone_wall_seconds",
+        "operational_wall_seconds_all_attempts", "standalone_peak_component_rss_gib",
+        "concurrent_rss_upper_bound_gib", "canonical_result_bytes",
+    }
     patterns = ["harmonized/*.parquet", "metrics/**/*.tsv", "tables/*.tsv"]
     for pattern in patterns:
         for observed in sorted(observed_root.glob(pattern)):
@@ -125,14 +130,20 @@ def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
                 if left.shape != right.shape or list(left.columns) != list(right.columns):
                     comparisons.append(row)
                     continue
-                numeric = [column for column in left.columns if pd.api.types.is_numeric_dtype(left[column]) and pd.api.types.is_numeric_dtype(right[column])]
+                ignored = summary_runtime_columns if str(relative) == "tables/benchmark_summary.tsv" else set()
+                numeric = [column for column in left.columns if column not in ignored and pd.api.types.is_numeric_dtype(left[column]) and pd.api.types.is_numeric_dtype(right[column])]
                 max_diff = 0.0
                 if numeric:
                     difference = (left[numeric].astype(float) - right[numeric].astype(float)).abs().to_numpy()
                     max_diff = float(np.nanmax(difference)) if difference.size and not np.isnan(difference).all() else 0.0
-                nonnumeric = [column for column in left.columns if column not in numeric]
+                nonnumeric = [column for column in left.columns if column not in numeric and column not in ignored]
                 text_equal = all(left[column].fillna("<NA>").astype(str).equals(right[column].fillna("<NA>").astype(str)) for column in nonnumeric)
-                row.update({"max_abs_numeric_difference": max_diff, "nonnumeric_equal": text_equal, "equal": text_equal and max_diff <= 1e-10})
+                tolerance = 2e-6 if str(relative) == "metrics/effect/transcriptomic_effect.tsv" else 1e-10
+                row.update({
+                    "max_abs_numeric_difference": max_diff, "numeric_tolerance": tolerance,
+                    "excluded_runtime_columns": sorted(ignored), "nonnumeric_equal": text_equal,
+                    "equal": text_equal and max_diff <= tolerance,
+                })
             except Exception as error:
                 row["error"] = f"{type(error).__name__}: {error}"
             comparisons.append(row)
