@@ -144,7 +144,8 @@ def _paired_differences(frame: pd.DataFrame, context: StageContext) -> pd.DataFr
 
 
 def _two_guide_sensitivity(pairs: pd.DataFrame, context: StageContext) -> tuple[pd.DataFrame,pd.DataFrame]:
-    if pairs.empty: return pd.DataFrame(),pd.DataFrame()
+    if pairs.empty or "replogle2022" not in context.dataset_ids:
+        return pd.DataFrame(),pd.DataFrame()
     selected=pairs[pairs.dataset_id.eq("replogle2022") & pairs.guide_sets_disjoint].copy()
     selected=selected[(selected.guide_set_left.str.count(r"\|")+1).eq(2) & (selected.guide_set_right.str.count(r"\|")+1).eq(2)]
     per=(selected.groupby(["dataset_id","method_id","target_id"],observed=True)
