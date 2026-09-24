@@ -98,6 +98,7 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
 def build_target_expression_reference(
     spec: dict[str, Any], shared_root: Path, destination: Path, project: Path
 ) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
     config = yaml.safe_load(Path(spec["target_expression_config"]).read_text(encoding="utf-8"))
     config.update({
         "dataset": spec["dataset"],
