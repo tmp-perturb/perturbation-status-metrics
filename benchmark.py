@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 import yaml
 
+HERE = Path(__file__).resolve().parent
+
 
 def safe_extract(archive_path: Path, destination: Path) -> None:
     with tarfile.open(archive_path, "r:gz") as archive:
@@ -56,13 +58,12 @@ def select_paths(groups: list[list[str]], predicate) -> list[str]:
 def write_resource_inputs(config: dict[str, Any], root: Path, method_records: dict[tuple[str, str], dict], shared: dict[str, tuple[Path, dict]]) -> None:
     resources = root / "resource_inputs"
     resources.mkdir(parents=True)
-    mixscale_rows, ps_rows, baseline_rows = [], [], []
+    mixscale_rows, ps_rows = [], []
     dataset_resources = {}
     for dataset in config["datasets"]:
         mixscape = method_records[(dataset, "mixscape")]
         mixscale = method_records[(dataset, "mixscale")]
         ps = method_records[(dataset, "ps")]
-        baseline = method_records[(dataset, "target_expression")]
         shared_root, shared_manifest = shared[dataset]
         mixscale_rows.append({
             "dataset": dataset, "wall_time_seconds": mixscale["wall_seconds"],
@@ -77,12 +78,6 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
             "shards": ps.get("workers", 1), "max_workers": ps.get("workers", 1),
             "execution_mode": "pooled_global_union_sharded", "failed_attempt_wall_seconds": 0,
         })
-        baseline_rows.append({
-            "dataset": dataset, "wall_seconds": baseline["wall_seconds"],
-            "peak_worker_rss_gib": baseline.get("peak_child_rss_kib", 0) / 2**20,
-            "concurrent_rss_upper_bound_gib": baseline.get("peak_child_rss_kib", 0) / 2**20,
-            "shards": baseline.get("workers", 1), "max_workers": baseline.get("workers", 1),
-        })
         dataset_resources[dataset] = {
             "shared_preprocessing_events": str(shared_root / "logs" / "stage_resources.jsonl"),
             "shard_build_time": str(shared_root / "shard_build.time.txt"),
@@ -92,14 +87,37 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
         }
     mixscale_path = resources / "mixscale.tsv"
     ps_path = resources / "ps.tsv"
-    baseline_path = resources / "baseline.tsv"
     pd.DataFrame(mixscale_rows).to_csv(mixscale_path, sep="\t", index=False)
     pd.DataFrame(ps_rows).to_csv(ps_path, sep="\t", index=False)
-    pd.DataFrame(baseline_rows).to_csv(baseline_path, sep="\t", index=False)
     config["resource_inputs"] = {
         "mixscale_manifest": str(mixscale_path), "ps_manifest": str(ps_path),
-        "target_expression_manifest": str(baseline_path), "datasets": dataset_resources,
+        "datasets": dataset_resources,
     }
+
+
+def build_target_expression_reference(
+    spec: dict[str, Any], shared_root: Path, destination: Path, project: Path
+) -> Path:
+    config = yaml.safe_load(Path(spec["target_expression_config"]).read_text(encoding="utf-8"))
+    config.update({
+        "dataset": spec["dataset"],
+        "checkpoint_dir": str(shared_root / "shards" / "checkpoints"),
+        "target_manifest": str(shared_root / "shards" / "target_manifest.tsv"),
+        "metadata": str(shared_root / "input" / "metadata.tsv.gz"),
+        "output_dir": str(destination),
+    })
+    if config.get("feature_map"):
+        config["feature_map"] = str(HERE / "resources" / "replogle2022_gene_map.tsv")
+    config_path = destination.parent / f'{spec["dataset"]}_target_expression_reference.yaml'
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    subprocess.run([
+        sys.executable, str(HERE / "reference_expression" / "run_reference.py"),
+        "--config", str(config_path), "--project-root", str(project),
+    ], check=True)
+    result = destination / "target_expression_reference.tsv"
+    if not result.is_file():
+        raise FileNotFoundError(result)
+    return result
 
 
 def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
@@ -200,9 +218,9 @@ def main() -> None:
 
         first_spec = next(iter(datasets.values()))[0]
         project = Path(first_spec["project_root"])
-        sys.path.insert(0, str(project / "07_benchmark" / "src"))
+        sys.path.insert(0, str(HERE))
         from perturb_status_benchmark.config import load_config
-        config = serializable(load_config(Path(first_spec["benchmark_config"])))
+        config = serializable(load_config(HERE / "config" / "benchmark_v0.3_construct_aware.yaml"))
         # Keep the frozen project root because harmonization intentionally uses
         # its validated Mixscale R helper and environment. All mutable run/output
         # paths and all data/method inputs below are absolute temporary paths.
@@ -213,7 +231,7 @@ def main() -> None:
         config["datasets"] = {dataset: config["datasets"][dataset] for dataset in datasets}
         for dataset, (_, h5ad) in datasets.items():
             config["datasets"][dataset]["h5ad"] = str(h5ad)
-            for method in ("mixscape", "mixscale", "ps", "target_expression"):
+            for method in ("mixscape", "mixscale", "ps"):
                 result, auxiliary = method_files[(dataset, method)]
                 config["datasets"][dataset]["methods"][method]["path"] = str(result)
                 aux_dir = root / "method_aux" / dataset / method
@@ -223,10 +241,22 @@ def main() -> None:
                     config["datasets"][dataset]["methods"][method]["availability"] = {
                         "mode": "rds_shards", "glob": str(aux_dir / "mixscale" / "shards" / "shard_*" / "mixscale_tool.rds")
                     }
+            reference = build_target_expression_reference(
+                datasets[dataset][0], shared[dataset][0], root / "target_expression_reference" / dataset, project
+            )
+            config["datasets"][dataset]["target_expression_reference"] = {
+                "path": str(reference), "target_column": "target_label",
+                "score_column": "reference_score", "status_column": "reference_status",
+                "scorable_status": ["engaged", "not_engaged"],
+            }
+            if dataset == "replogle2022":
+                config["datasets"][dataset]["expression"]["target_feature_map"] = str(
+                    HERE / "resources" / "replogle2022_gene_map.tsv"
+                )
         write_resource_inputs(config, root, method_records, shared)
         config_path = root / "benchmark.yaml"
         config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-        command = [sys.executable, str(project / "07_benchmark" / "run_benchmark.py"), "--config", str(config_path), "--stage", "all", "--run-id", "omni", "--publish"]
+        command = [sys.executable, str(HERE / "run_benchmark.py"), "--config", str(config_path), "--stage", "all", "--run-id", "omni", "--publish"]
         print("+ " + " ".join(command), flush=True)
         subprocess.run(command, check=True)
         published = root / "published" / "omni"

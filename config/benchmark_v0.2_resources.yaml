@@ -1,0 +1,27 @@
+extends: benchmark_v0.2_agreement.yaml
+
+resource_inputs:
+  mixscale_manifest: 04_mixscale/results/mixscale_run_manifest.tsv
+  ps_manifest: 05_ps/results/ps_run_manifest.tsv
+  datasets:
+    papalexi2021:
+      shared_preprocessing_events: 03_mixscape/logs/papalexi2021/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/papalexi2021_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 21
+      mixscape_peak_worker_rss_gib: 2.09
+      mixscape_shards: 4
+      mixscape_workers: 4
+    norman2019:
+      shared_preprocessing_events: 03_mixscape/logs/norman2019/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/norman2019_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 509
+      mixscape_peak_worker_rss_gib: 7.16
+      mixscape_shards: 8
+      mixscape_workers: 6
+    replogle2022:
+      shared_preprocessing_events: 03_mixscape/logs/replogle2022_sa/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/replogle2022_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 3840
+      mixscape_peak_worker_rss_gib: 10.16
+      mixscape_shards: 16
+      mixscape_workers: 6

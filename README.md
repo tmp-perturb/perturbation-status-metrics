@@ -1,6 +1,6 @@
 # perturbation-status-metrics
 
-Omnibenchmark metric collector for the complete perturbation-status estimation
-benchmark. It gathers all four method branches, runs the frozen v0.2 stages
-(B1–B4, D1, R1, figures and final tables), and emits the complete published
-benchmark tree as an archive plus the summary and run manifest.
+Omnibenchmark collector for the complete three-method perturbation-status
+benchmark. It freezes the v0.3 construct-aware implementation, computes target
+expression only as an internal engagement-reference quantity, executes every
+scientific and resource stage, and publishes the complete result archive.

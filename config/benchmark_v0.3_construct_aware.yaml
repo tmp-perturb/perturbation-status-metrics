@@ -1,0 +1,32 @@
+extends: benchmark_v0.2_resources.yaml
+
+protocol_version: v0.3
+
+cohort:
+  min_cells_per_construct: 10
+
+pseudobulk:
+  min_ntc_detection_fraction: 0.01
+  profile_unit: construct_id
+  guide_set_source: observed_eligible_cells
+  require_disjoint_guide_sets: true
+
+datasets:
+  replogle2022:
+    metadata:
+      construct: assigned_construct
+    reproducibility:
+      enabled: true
+      require_two_observed_guides_sensitivity: true
+  papalexi2021:
+    metadata:
+      construct: assigned_construct
+    reproducibility:
+      enabled: true
+  norman2019:
+    metadata:
+      construct: assigned_construct
+    reproducibility:
+      enabled: false
+      status: not_applicable_shared_targeting_guide_position_constructs
+      reason: Positional constructs share the targeting guide, and multi-gene perturbations lack independent replicate constructs.
