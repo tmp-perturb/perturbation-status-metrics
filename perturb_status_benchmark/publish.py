@@ -28,25 +28,11 @@ def publish(config: dict[str, Any], run_id: str, run_root: Path, required_stages
     _copy(run_root / "stages" / "validate" / "harmonized", temporary / "harmonized")
     _copy(run_root / "stages" / "embedding" / "expression", temporary / "expression" / "embedding")
     _copy(run_root / "stages" / "pseudobulk" / "pseudobulk", temporary / "expression" / "pseudobulk")
-    for stage in ["coverage", "engagement", "effect", "reproducibility", "agreement", "resources"]:
+    for stage in ["coverage", "target_expression", "effect", "reproducibility", "agreement", "resources"]:
         target = temporary / "metrics" / stage
         target.mkdir(parents=True, exist_ok=True)
         for source in (run_root / "stages" / stage).glob("*.tsv"):
             shutil.copy2(source, target / source.name)
-        for source in (run_root / "stages" / stage).glob("*.pdf"):
-            figure = temporary / "figures" / source.name
-            figure.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, figure)
-    figures_root = run_root / "stages" / "figures"
-    if figures_root.exists():
-        for source in figures_root.rglob("*.pdf"):
-            _copy(source, temporary / "figures" / source.relative_to(figures_root))
-        for source in figures_root.rglob("*.png"):
-            _copy(source, temporary / "figures" / source.relative_to(figures_root))
-        for source in (run_root / "stages" / stage).glob("*.png"):
-            figure = temporary / "figures" / source.name
-            figure.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, figure)
     _copy(run_root / "stages" / "report" / "benchmark_summary.tsv", temporary / "tables" / "benchmark_summary.tsv")
     _copy(run_root / "stages" / "report" / "benchmark_report.md", temporary / "report" / "benchmark_report.md")
     _copy(run_root / "run_manifest.json", temporary / "manifest" / "run_manifest.json")

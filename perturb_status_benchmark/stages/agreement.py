@@ -6,17 +6,16 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
 from ..context import StageContext
-from ..io import atomic_savefig, atomic_write_tsv
+from ..io import atomic_write_tsv
 from ..statistics import bootstrap_median_ci, bootstrap_spearman_ci, stable_seed
 
 
-METHODS = ["mixscape", "mixscale", "ps"]
+METHODS = ["mixscape", "mixscale", "ps", "target_expression"]
 PAIRS = list(combinations(METHODS, 2))
 
 
@@ -27,6 +26,7 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     base_seed = int(context.config["statistics"]["seed"])
     cell_rows: list[dict[str, Any]] = []
     median_rows: list[dict[str, Any]] = []
+    binary_rows: list[dict[str, Any]] = []
 
     for dataset_id in context.dataset_ids:
         frame = pd.read_parquet(
@@ -76,20 +76,23 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
                     "ci_low": low, "ci_high": high,
                 })
 
+        binary_rows.extend(_binary_agreement(frame, dataset_id, minimum))
+
     per_target = pd.DataFrame(cell_rows)
     summary = _cell_summaries(per_target, context, resamples, base_seed)
     target_medians = pd.DataFrame(median_rows)
+    binary = pd.DataFrame(binary_rows)
     outputs = [
         (per_target, "agreement_per_perturbation.tsv"),
         (summary, "agreement_cell_summary.tsv"),
         (target_medians, "agreement_target_medians.tsv"),
+        (binary, "native_binary_agreement.tsv"),
     ]
     artifacts = []
     for table, name in outputs:
         path = context.stage_dir / name
         atomic_write_tsv(table, path)
         artifacts.append(path)
-    artifacts.extend(_plot(summary, target_medians, context.stage_dir))
     return artifacts, {
         "pair_perturbation_rows": len(per_target),
         "scorable_cell_correlations": int(per_target["rho_cell"].notna().sum()),
@@ -129,30 +132,21 @@ def _cell_summaries(frame: pd.DataFrame, context: StageContext, resamples: int, 
     return pd.DataFrame(rows)
 
 
-def _plot(cell_summary: pd.DataFrame, target_medians: pd.DataFrame, output: Path) -> list[Path]:
-    datasets = list(dict.fromkeys(cell_summary["dataset_id"]))
-    figure, axes = plt.subplots(2, len(datasets), figsize=(4.0 * len(datasets), 7.0), squeeze=False)
-    for column, dataset_id in enumerate(datasets):
-        for row, (table, value, title) in enumerate([
-            (cell_summary, "median_rho_cell", "Median within-target cell rho"),
-            (target_medians, "rho_target_median", "Target-median score rho"),
-        ]):
-            selected = table[table["dataset_id"].eq(dataset_id) & table["stratum"].eq("all")]
-            matrix = np.eye(len(METHODS))
-            for record in selected.itertuples():
-                i, j = METHODS.index(record.method_left), METHODS.index(record.method_right)
-                matrix[i, j] = matrix[j, i] = getattr(record, value)
-            axis = axes[row, column]
-            image = axis.imshow(matrix, vmin=-1, vmax=1, cmap="RdBu_r")
-            axis.set_xticks(range(len(METHODS)), METHODS, rotation=35, ha="right")
-            axis.set_yticks(range(len(METHODS)), METHODS)
-            axis.set_title(f"{dataset_id}\n{title}")
-            for i in range(len(METHODS)):
-                for j in range(len(METHODS)):
-                    axis.text(j, i, f"{matrix[i, j]:.2f}", ha="center", va="center", fontsize=7)
-    figure.colorbar(image, ax=axes, fraction=0.02, pad=0.03, label="Spearman rho")
-    png, pdf = output / "agreement.png", output / "agreement.pdf"
-    atomic_savefig(figure, png, dpi=200, bbox_inches="tight")
-    atomic_savefig(figure, pdf, bbox_inches="tight")
-    plt.close(figure)
-    return [png, pdf]
+def _binary_agreement(frame: pd.DataFrame, dataset_id: str, minimum: int) -> list[dict[str, Any]]:
+    mix = frame.loc[frame["method_id"].eq("mixscape") & frame["native_status"].isin(["perturbed", "np"]), ["cell_id", "target_id", "perturbation_order", "native_status"]]
+    base = frame.loc[frame["method_id"].eq("target_expression") & frame["native_status"].isin(["engaged", "not_engaged"]), ["cell_id", "target_id", "native_status"]]
+    common = mix.merge(base, on=["cell_id", "target_id"], suffixes=("_mixscape", "_target_expression"), validate="one_to_one")
+    rows = []
+    for (target_id, order), group in common.groupby(["target_id", "perturbation_order"], sort=False, observed=True):
+        left = group["native_status_mixscape"].eq("perturbed").to_numpy()
+        right = group["native_status_target_expression"].eq("engaged").to_numpy()
+        union = np.logical_or(left, right).sum()
+        rows.append({
+            "dataset_id": dataset_id, "target_id": target_id, "perturbation_order": int(order),
+            "common_cells": len(group), "status": "scorable" if len(group) >= minimum else "insufficient_common_cells",
+            "observed_agreement": float(np.mean(left == right)) if len(group) >= minimum else np.nan,
+            "positive_jaccard": float(np.logical_and(left, right).sum() / union) if len(group) >= minimum and union else np.nan,
+            "mixscape_positive_rate": float(left.mean()) if len(group) >= minimum else np.nan,
+            "target_expression_positive_rate": float(right.mean()) if len(group) >= minimum else np.nan,
+        })
+    return rows

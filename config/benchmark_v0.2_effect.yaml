@@ -1,6 +1,0 @@
-extends: benchmark_v0.2_expression.yaml
-
-energy_distance:
-  max_target_cells: 256
-  ntc_cells: 512
-  seed: 20260913

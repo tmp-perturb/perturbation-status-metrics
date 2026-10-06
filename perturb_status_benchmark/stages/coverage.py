@@ -6,12 +6,11 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from ..context import StageContext
-from ..io import atomic_savefig, atomic_write_tsv
+from ..io import atomic_write_tsv
 from .harmonize import METHOD_ORDER
 
 
@@ -97,36 +96,5 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     atomic_write_tsv(summary, summary_path)
     atomic_write_tsv(common, common_path)
     atomic_write_tsv(patterns, pattern_path)
-    figure_paths = _plot(summary, context.stage_dir)
-    artifacts = [summary_path, common_path, pattern_path, *figure_paths]
+    artifacts = [summary_path, common_path, pattern_path]
     return artifacts, {"summary_rows": len(summary), "availability_patterns": len(patterns)}
-
-
-def _plot(summary: pd.DataFrame, output: Path) -> list[Path]:
-    data = summary[summary["stratum"] == "all"]
-    datasets = list(dict.fromkeys(data["dataset_id"]))
-    colors = {"mixscape": "#0072B2", "mixscale": "#CC79A7", "ps": "#009E73"}
-    figure, axes = plt.subplots(1, len(datasets), figsize=(12, 4.2), sharey=True)
-    axes = np.atleast_1d(axes)
-    x = np.arange(len(METHOD_ORDER))
-    width = 0.34
-    for axis, dataset_id in zip(axes, datasets):
-        subset = data.set_index(["dataset_id", "method_id"]).loc[dataset_id]
-        target_values = [subset.loc[method, "perturbation_coverage"] for method in METHOD_ORDER]
-        cell_values = [subset.loc[method, "targeted_cell_coverage"] for method in METHOD_ORDER]
-        axis.bar(x - width / 2, target_values, width, color=[colors[m] for m in METHOD_ORDER], alpha=0.95)
-        axis.bar(x + width / 2, cell_values, width, color=[colors[m] for m in METHOD_ORDER], alpha=0.42, hatch="//")
-        axis.set_title(dataset_id)
-        axis.set_xticks(x, METHOD_ORDER, rotation=25, ha="right")
-        axis.set_ylim(0, 1.04)
-    axes[0].set_ylabel("Coverage fraction")
-    handles = [plt.Rectangle((0, 0), 1, 1, color="#666666", alpha=0.95), plt.Rectangle((0, 0), 1, 1, color="#666666", alpha=0.42, hatch="//")]
-    figure.legend(handles, ["Perturbations", "Targeted cells"], loc="lower center", ncol=2, frameon=False)
-    figure.suptitle("Method assessability")
-    figure.tight_layout(rect=(0, 0.12, 1, 0.95))
-    png = output / "coverage.png"
-    pdf = output / "coverage.pdf"
-    atomic_savefig(figure, png, dpi=200)
-    atomic_savefig(figure, pdf)
-    plt.close(figure)
-    return [png, pdf]

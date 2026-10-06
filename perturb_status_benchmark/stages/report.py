@@ -15,7 +15,7 @@ from .harmonize import METHOD_ORDER
 
 def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     coverage = _read(context, "coverage", "coverage_summary.tsv")
-    engagement = _read(context, "engagement", "engagement_summary.tsv")
+    engagement = _read(context, "target_expression", "direct_expression_summary.tsv")
     effect = _read(context, "effect", "effect_association.tsv")
     reproducibility = _read(context, "reproducibility", "reproducibility_summary.tsv")
     resources = _read(context, "resources", "resource_summary.tsv")
@@ -30,14 +30,14 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
         ]], on=["dataset_id", "method_id"], how="left", validate="one_to_one"
     )
     table = table.merge(
-        engagement.loc[engagement["stratum"].eq("all"), [
-            "dataset_id", "method_id", "scorable_correlations", "median_rho", "ci_low", "ci_high",
+        engagement.loc[:, [
+            "dataset_id", "method_id", "scorable_perturbations", "median_rho", "ci_low", "ci_high",
         ]].rename(columns={
-            "scorable_correlations": "engagement_perturbations", "median_rho": "engagement_median_rho",
+            "scorable_perturbations": "engagement_perturbations", "median_rho": "engagement_median_rho",
             "ci_low": "engagement_ci_low", "ci_high": "engagement_ci_high",
         }), on=["dataset_id", "method_id"], how="left", validate="one_to_one"
     )
-    table["engagement_status"] = np.where(table["engagement_median_rho"].notna(), "reported", "not_estimable")
+    table["engagement_status"] = np.where(table["method_id"].eq("target_expression"), "reference_not_evaluated", np.where(table["engagement_median_rho"].notna(), "reported", "not_estimable"))
     table = table.merge(
         effect.loc[effect["stratum"].eq("all"), ["dataset_id", "method_id", "perturbations", "spearman_rho", "ci_low", "ci_high"]].rename(columns={
             "perturbations": "effect_perturbations", "spearman_rho": "effect_spearman_rho",
@@ -56,7 +56,7 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     table_path = context.stage_dir / "benchmark_summary.tsv"
     atomic_write_tsv(table, table_path)
     report_path = context.stage_dir / "benchmark_report.md"
-    _write_report(table, report_path, context.config["protocol_version"])
+    _write_report(table, report_path, context.config["protocol"])
     return [table_path, report_path], {
         "summary_rows": len(table),
         "global_validation": "pass",
@@ -102,9 +102,10 @@ def _write_report(table: pd.DataFrame, path: Path, protocol: str) -> None:
         "See `benchmark_summary.tsv`. CRISPRko, CRISPRa and CRISPRi remain separate dataset rows.", "",
         "## Required disclosures", "",
         "- PS uses the validated `pooled_global_union_sharded` scalable approximation.",
-        "- Target expression is computed inside the engagement metric as a reference quantity, not as a benchmarked method.",
+        "- Within-perturbation target-expression correlation uses NTC-free direction-adjusted direct target-gene expression.",
+        "- The target-expression baseline reuses Mixscape matched-control assignments and is not independent ground truth.",
         "- Cross-method agreement is descriptive concordance, not correctness.",
-        "- Construct-profile reproducibility compares distinct constructs with disjoint observed guide sets; Norman is not applicable.",
+        "- PSE-weighting effects compare different guide implementations with disjoint targeted cells and symmetrized, disjoint batch-matched NTC references; Norman is not applicable.",
         "- Missing resource measurements are retained as missing.", "",
     ]
     temporary = path.with_suffix(path.suffix + ".tmp")

@@ -1,9 +1,0 @@
-extends: benchmark_v0.2_effect.yaml
-
-pseudobulk:
-  min_ntc_detection_fraction: 0.01
-
-datasets:
-  replogle2022:
-    expression:
-      target_feature_map: 07_benchmark/resources/replogle2022_gene_map.tsv

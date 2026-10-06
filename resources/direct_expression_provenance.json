@@ -1,0 +1,9 @@
+{
+  "asset": "direct_expression_cells.tsv.gz",
+  "sha256": "40292f9adce7401e76cdfac7904ab5791361e98b5190af3013f683debdb7d4a0",
+  "source_script": "07_benchmark/supplementary_analyses/03_direct_expression_validation/script/extract_direct_expression.R",
+  "source_inputs": "01_standardize_inputs/outputs/<dataset>/perturbation_adata.h5ad via the matched Seurat RNA data checkpoints",
+  "definition": "Direction-adjusted log1p(CP10K) target-gene expression; CRISPRi/CRISPRko sign -1, CRISPRa sign +1; multi-gene perturbations average resolved components",
+  "datasets": ["replogle2022", "norman2019", "papalexi2021"],
+  "status": "frozen_final_benchmark_input"
+}

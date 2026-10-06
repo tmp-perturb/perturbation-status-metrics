@@ -7,15 +7,14 @@ import re
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from ..context import StageContext
-from ..io import atomic_savefig, atomic_write_tsv
+from ..io import atomic_write_tsv
 
 
-METHODS = ["mixscape", "mixscale", "ps"]
+METHODS = ["mixscape", "mixscale", "ps", "target_expression"]
 
 
 def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
@@ -25,6 +24,7 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     root = context.config["project_root"]
     mixscale = pd.read_csv(_path(root, spec["mixscale_manifest"]), sep="\t").set_index("dataset")
     ps = pd.read_csv(_path(root, spec["ps_manifest"]), sep="\t").set_index("dataset")
+    baseline = pd.read_csv(_path(root, spec["target_expression_manifest"]), sep="\t").set_index("dataset")
     events: list[dict[str, Any]] = []
 
     for dataset_id in context.dataset_ids:
@@ -46,6 +46,8 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
         events.append(_event(dataset_id, "ps", "scoring_success", wall_seconds=p.successful_attempt_wall_seconds, peak_rss_gib=p.analysis_peak_single_process_rss_gib, rss_type="peak_process", concurrent_rss_upper_bound_gib=p.analysis_concurrent_rss_upper_bound_gib, shards=p.shards, workers=p.max_workers, source_path=spec["ps_manifest"], execution_mode=p.execution_mode))
         if float(p.failed_attempt_wall_seconds) > 0:
             events.append(_event(dataset_id, "ps", "scoring_failed", wall_seconds=p.failed_attempt_wall_seconds, source_path=spec["ps_manifest"], note="terminated attempt retained in operational cost"))
+        b = baseline.loc[dataset_id]
+        events.append(_event(dataset_id, "target_expression", "scoring_success", wall_seconds=b.wall_seconds, peak_rss_gib=b.peak_worker_rss_gib, rss_type="peak_worker", concurrent_rss_upper_bound_gib=b.concurrent_rss_upper_bound_gib, shards=b.shards, workers=b.max_workers, source_path=spec["target_expression_manifest"]))
 
     event_frame = pd.DataFrame(events)
     summary = _summarize(event_frame, context)
@@ -53,8 +55,7 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     summary_path = context.stage_dir / "resource_summary.tsv"
     atomic_write_tsv(event_frame, event_path)
     atomic_write_tsv(summary, summary_path)
-    figures = _plot(summary, context.stage_dir)
-    return [event_path, summary_path, *figures], {
+    return [event_path, summary_path], {
         "runtime_events": len(event_frame),
         "dataset_method_summaries": len(summary),
         "complete_standalone_wall_times": int(summary["standalone_wall_seconds"].notna().sum()),
@@ -122,25 +123,3 @@ def _summarize(events: pd.DataFrame, context: StageContext) -> pd.DataFrame:
                 "standalone_complete": bool(pd.notna(standalone)),
             })
     return pd.DataFrame(rows)
-
-
-def _plot(summary: pd.DataFrame, output: Path) -> list[Path]:
-    datasets = list(dict.fromkeys(summary["dataset_id"]))
-    figure, axes = plt.subplots(1, len(datasets), figsize=(4.1 * len(datasets), 4.1), sharey=True)
-    axes = np.atleast_1d(axes)
-    colors = ["#0072B2", "#CC79A7", "#009E73"]
-    for axis, dataset_id in zip(axes, datasets):
-        selected = summary[summary["dataset_id"].eq(dataset_id)].set_index("method_id").reindex(METHODS)
-        values = selected["standalone_wall_seconds"].to_numpy() / 60
-        axis.bar(range(len(METHODS)), values, color=colors)
-        axis.set_yscale("log")
-        axis.set_xticks(range(len(METHODS)), METHODS, rotation=35, ha="right")
-        axis.set_title(dataset_id)
-    axes[0].set_ylabel("Standalone wall time (minutes, log scale)")
-    figure.suptitle("Recorded end-to-end execution cost")
-    figure.tight_layout()
-    png, pdf = output / "resources.png", output / "resources.pdf"
-    atomic_savefig(figure, png, dpi=200)
-    atomic_savefig(figure, pdf)
-    plt.close(figure)
-    return [png, pdf]

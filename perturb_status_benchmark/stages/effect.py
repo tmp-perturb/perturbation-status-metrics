@@ -6,14 +6,13 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist, pdist
 from scipy.stats import spearmanr
 
 from ..context import StageContext
-from ..io import atomic_savefig, atomic_write_tsv
+from ..io import atomic_write_tsv
 from ..statistics import bootstrap_spearman_ci, stable_seed
 from .harmonize import METHOD_ORDER
 
@@ -95,8 +94,7 @@ def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
     atomic_write_tsv(score_medians, median_path)
     atomic_write_tsv(summaries, association_path)
     atomic_write_tsv(pairwise, pairwise_path)
-    figures = _plot(combined[combined["targeted_cells"] >= minimum], summaries, context.stage_dir)
-    artifacts = [effect_path, median_path, association_path, pairwise_path, *figures]
+    artifacts = [effect_path, median_path, association_path, pairwise_path]
     return artifacts, {
         "perturbations": len(effects),
         "max_target_sample": max_target,
@@ -222,30 +220,3 @@ def _paired_differences(
                     "ci_high": high,
                 })
     return pd.DataFrame(rows)
-
-
-def _plot(frame: pd.DataFrame, summaries: pd.DataFrame, output: Path) -> list[Path]:
-    datasets = list(dict.fromkeys(frame["dataset_id"]))
-    figure, axes = plt.subplots(len(datasets), len(METHOD_ORDER), figsize=(13, 3.3 * len(datasets)), squeeze=False)
-    colors = {"mixscape": "#0072B2", "mixscale": "#CC79A7", "ps": "#009E73"}
-    for row, dataset_id in enumerate(datasets):
-        for column, method_id in enumerate(METHOD_ORDER):
-            axis = axes[row, column]
-            subset = frame[(frame["dataset_id"] == dataset_id) & (frame["method_id"] == method_id)]
-            axis.scatter(subset["median_score"], subset["energy_distance"], s=7, alpha=0.35, color=colors[method_id], linewidths=0)
-            summary = summaries[(summaries["dataset_id"] == dataset_id) & (summaries["stratum"] == "all") & (summaries["method_id"] == method_id)].iloc[0]
-            axis.text(0.04, 0.95, f"n={int(summary['perturbations'])}\nrho={summary['spearman_rho']:.2f}", transform=axis.transAxes, va="top", fontsize=8)
-            if row == 0:
-                axis.set_title(method_id)
-            if column == 0:
-                axis.set_ylabel(f"{dataset_id}\nE-distance")
-            if row == len(datasets) - 1:
-                axis.set_xlabel("Perturbation median score")
-    figure.suptitle("Transcriptomic effect association")
-    figure.tight_layout(rect=(0, 0, 1, 0.97))
-    png = output / "effect_association.png"
-    pdf = output / "effect_association.pdf"
-    atomic_savefig(figure, png, dpi=200)
-    atomic_savefig(figure, pdf)
-    plt.close(figure)
-    return [png, pdf]

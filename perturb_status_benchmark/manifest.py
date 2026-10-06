@@ -29,7 +29,7 @@ class RunManifest:
         else:
             self.data = {
                 "run_id": run_id,
-                "protocol_version": config["protocol_version"],
+                "protocol": config["protocol"],
                 "config_path": str(config["config_path"]),
                 "config_fingerprint": config["fingerprint"],
                 "dataset_ids": list(dataset_ids),

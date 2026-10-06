@@ -10,20 +10,21 @@ from typing import Any
 import yaml
 
 
-REQUIRED_METHODS = {"mixscape", "mixscale", "ps"}
+REQUIRED_METHODS = {"mixscape", "mixscale", "ps", "target_expression"}
 
 
 def load_config(path: Path) -> dict[str, Any]:
     config = _read_with_extends(path.resolve(), set())
     if not isinstance(config, dict):
         raise ValueError("Benchmark config must be a YAML mapping")
-    for key in ("protocol_version", "project_root", "datasets", "cohort", "resources"):
+    for key in ("protocol", "project_root", "datasets", "cohort", "resources"):
         if key not in config:
             raise ValueError(f"Missing required config key: {key}")
     project_root = Path(config["project_root"]).resolve()
     if not project_root.is_dir():
         raise FileNotFoundError(f"project_root does not exist: {project_root}")
     config["project_root"] = project_root
+    config["direct_expression"]["cell_table"] = resolve_path(project_root, config["direct_expression"]["cell_table"])
     for key in ("output_root", "work_root", "log_root"):
         config[key] = resolve_path(project_root, config[key])
     if not config["datasets"]:
@@ -38,10 +39,6 @@ def load_config(path: Path) -> dict[str, Any]:
             expression["target_feature_map"] = resolve_path(project_root, expression["target_feature_map"])
         for method in dataset["methods"].values():
             method["path"] = resolve_path(project_root, method["path"])
-        if dataset.get("target_expression_reference"):
-            dataset["target_expression_reference"]["path"] = resolve_path(
-                project_root, dataset["target_expression_reference"]["path"]
-            )
     config["config_path"] = path.resolve()
     config["fingerprint"] = fingerprint(config)
     return config

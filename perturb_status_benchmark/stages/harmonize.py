@@ -15,7 +15,7 @@ from ..io import atomic_write_json, atomic_write_parquet, atomic_write_tsv, read
 from ..context import StageContext
 
 
-METHOD_ORDER = ["mixscape", "mixscale", "ps"]
+METHOD_ORDER = ["mixscape", "mixscale", "ps", "target_expression"]
 
 
 def run(context: StageContext) -> tuple[list[Path], dict[str, Any]]:
@@ -159,7 +159,7 @@ def _read_method(
     merged["unscorable_reason"] = pd.Series(pd.NA, index=merged.index, dtype="string")
     merged.loc[merged["is_ntc"], "unscorable_reason"] = "reference_control"
     merged.loc[(~merged["is_ntc"]) & (~merged["scorable"]), "unscorable_reason"] = reason
-    if method_id == "ps":
+    if method_id in {"ps", "target_expression"}:
         failed = (~merged["is_ntc"]) & (~merged["scorable"]) & raw.notna()
         merged.loc[failed, "unscorable_reason"] = raw.loc[failed]
     output_columns = [

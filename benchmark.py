@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Collect all method branches and run the complete v0.2 benchmark."""
+"""Collect all method branches and run the frozen data-only benchmark."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -19,6 +20,19 @@ import pandas as pd
 import yaml
 
 HERE = Path(__file__).resolve().parent
+
+
+def verify_direct_expression_asset() -> Path:
+    asset = HERE / "resources" / "direct_expression_cells.tsv.gz"
+    provenance = json.loads(
+        (HERE / "resources" / "direct_expression_provenance.json").read_text(encoding="utf-8")
+    )
+    observed = hashlib.sha256(asset.read_bytes()).hexdigest()
+    if observed != provenance["sha256"]:
+        raise ValueError(
+            f"Frozen direct-expression asset checksum mismatch: {observed} != {provenance['sha256']}"
+        )
+    return asset
 
 
 def safe_extract(archive_path: Path, destination: Path) -> None:
@@ -55,10 +69,16 @@ def select_paths(groups: list[list[str]], predicate) -> list[str]:
     return sorted(selected)
 
 
-def write_resource_inputs(config: dict[str, Any], root: Path, method_records: dict[tuple[str, str], dict], shared: dict[str, tuple[Path, dict]]) -> None:
+def write_resource_inputs(
+    config: dict[str, Any],
+    root: Path,
+    method_records: dict[tuple[str, str], dict],
+    shared: dict[str, tuple[Path, dict]],
+    target_expression_records: dict[str, dict[str, Any]],
+) -> None:
     resources = root / "resource_inputs"
     resources.mkdir(parents=True)
-    mixscale_rows, ps_rows = [], []
+    mixscale_rows, ps_rows, target_expression_rows = [], [], []
     dataset_resources = {}
     for dataset in config["datasets"]:
         mixscape = method_records[(dataset, "mixscape")]
@@ -78,6 +98,21 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
             "shards": ps.get("workers", 1), "max_workers": ps.get("workers", 1),
             "execution_mode": "pooled_global_union_sharded", "failed_attempt_wall_seconds": 0,
         })
+        record = target_expression_records[dataset]
+        worker_peak_gib = max(
+            (item.get("peak_rss_kib") or 0) / 2**20
+            for item in record.get("worker_metrics", [])
+        )
+        target_expression_rows.append({
+            "dataset": dataset,
+            "shards": record["shards"],
+            "max_workers": record["max_workers"],
+            "numerical_threads_per_worker": record["numerical_threads_per_worker"],
+            "wall_seconds": record["wall_seconds"],
+            "peak_worker_rss_gib": worker_peak_gib,
+            "concurrent_rss_upper_bound_gib": worker_peak_gib * record["max_workers"],
+            "status": record["status"],
+        })
         dataset_resources[dataset] = {
             "shared_preprocessing_events": str(shared_root / "logs" / "stage_resources.jsonl"),
             "shard_build_time": str(shared_root / "shard_build.time.txt"),
@@ -87,17 +122,20 @@ def write_resource_inputs(config: dict[str, Any], root: Path, method_records: di
         }
     mixscale_path = resources / "mixscale.tsv"
     ps_path = resources / "ps.tsv"
+    target_expression_path = resources / "target_expression.tsv"
     pd.DataFrame(mixscale_rows).to_csv(mixscale_path, sep="\t", index=False)
     pd.DataFrame(ps_rows).to_csv(ps_path, sep="\t", index=False)
+    pd.DataFrame(target_expression_rows).to_csv(target_expression_path, sep="\t", index=False)
     config["resource_inputs"] = {
         "mixscale_manifest": str(mixscale_path), "ps_manifest": str(ps_path),
+        "target_expression_manifest": str(target_expression_path),
         "datasets": dataset_resources,
     }
 
 
 def build_target_expression_reference(
     spec: dict[str, Any], shared_root: Path, destination: Path, project: Path
-) -> Path:
+) -> tuple[Path, dict[str, Any]]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     config = yaml.safe_load(Path(spec["target_expression_config"]).read_text(encoding="utf-8"))
     config.update({
@@ -118,7 +156,15 @@ def build_target_expression_reference(
     result = destination / "target_expression_reference.tsv"
     if not result.is_file():
         raise FileNotFoundError(result)
-    return result
+    baseline = destination / "target_expression_baseline.tsv"
+    frame = pd.read_csv(result, sep="\t")
+    frame.rename(columns={
+        "reference_score": "baseline_score",
+        "reference_status": "baseline_status",
+        "reference_threshold": "reference_threshold",
+    }).to_csv(baseline, sep="\t", index=False)
+    manifest = json.loads((destination / "run_manifest.json").read_text(encoding="utf-8"))
+    return baseline, manifest
 
 
 def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
@@ -128,7 +174,12 @@ def compare_tables(observed_root: Path, reference_root: Path) -> dict[str, Any]:
         "operational_wall_seconds_all_attempts", "standalone_peak_component_rss_gib",
         "concurrent_rss_upper_bound_gib", "canonical_result_bytes",
     }
-    patterns = ["harmonized/*.parquet", "metrics/**/*.tsv", "tables/*.tsv"]
+    patterns = [
+        "harmonized/**/*.parquet",
+        "expression/**/*.parquet",
+        "metrics/**/*.tsv",
+        "tables/*.tsv",
+    ]
     for pattern in patterns:
         for observed in sorted(observed_root.glob(pattern)):
             relative = observed.relative_to(observed_root)
@@ -221,7 +272,7 @@ def main() -> None:
         project = Path(first_spec["project_root"])
         sys.path.insert(0, str(HERE))
         from perturb_status_benchmark.config import load_config
-        config = serializable(load_config(HERE / "config" / "benchmark_v0.3_construct_aware.yaml"))
+        config = serializable(load_config(HERE / "config" / "benchmark.yaml"))
         # Keep the frozen project root because harmonization intentionally uses
         # its validated Mixscale R helper and environment. All mutable run/output
         # paths and all data/method inputs below are absolute temporary paths.
@@ -229,7 +280,9 @@ def main() -> None:
         config["output_root"] = str(root / "published")
         config["work_root"] = str(root / "work")
         config["log_root"] = str(root / "logs")
+        config["direct_expression"]["cell_table"] = str(verify_direct_expression_asset())
         config["datasets"] = {dataset: config["datasets"][dataset] for dataset in datasets}
+        target_expression_records: dict[str, dict[str, Any]] = {}
         for dataset, (_, h5ad) in datasets.items():
             config["datasets"][dataset]["h5ad"] = str(h5ad)
             for method in ("mixscape", "mixscale", "ps"):
@@ -242,19 +295,20 @@ def main() -> None:
                     config["datasets"][dataset]["methods"][method]["availability"] = {
                         "mode": "rds_shards", "glob": str(aux_dir / "mixscale" / "shards" / "shard_*" / "mixscale_tool.rds")
                     }
-            reference = build_target_expression_reference(
+            reference, reference_manifest = build_target_expression_reference(
                 datasets[dataset][0], shared[dataset][0], root / "target_expression_reference" / dataset, project
             )
-            config["datasets"][dataset]["target_expression_reference"] = {
+            target_expression_records[dataset] = reference_manifest
+            config["datasets"][dataset]["methods"]["target_expression"] = {
                 "path": str(reference), "target_column": "target_label",
-                "score_column": "reference_score", "status_column": "reference_status",
+                "score_column": "baseline_score", "status_column": "baseline_status",
                 "scorable_status": ["engaged", "not_engaged"],
             }
             if dataset == "replogle2022":
                 config["datasets"][dataset]["expression"]["target_feature_map"] = str(
                     HERE / "resources" / "replogle2022_gene_map.tsv"
                 )
-        write_resource_inputs(config, root, method_records, shared)
+        write_resource_inputs(config, root, method_records, shared, target_expression_records)
         config_path = root / "benchmark.yaml"
         config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
         command = [sys.executable, str(HERE / "run_benchmark.py"), "--config", str(config_path), "--stage", "all", "--run-id", "omni", "--publish"]

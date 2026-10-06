@@ -84,6 +84,7 @@ def _build_dataset(
         .to_dict()
     )
     group_records: list[dict[str, Any]] = []
+    membership_records: list[pd.DataFrame] = []
     cell_groups: dict[str, np.ndarray] = {}
     cell_weights: dict[str, np.ndarray] = {}
 
@@ -125,6 +126,10 @@ def _build_dataset(
                 "weight_sum": float(weights.sum()),
                 "effective_weighted_cells": float(weights.sum() ** 2 / np.square(weights).sum()),
             })
+            membership_records.append(pd.DataFrame({
+                "profile_row": group_id,
+                "cell_id": group["cell_id"].astype(str).to_numpy(),
+            }))
         groups = np.full(len(metadata), -1, dtype=np.int32)
         weights = np.zeros(len(metadata), dtype=np.float32)
         if len(method):
@@ -141,11 +146,22 @@ def _build_dataset(
     batch_values = sorted(metadata["batch_id"].astype(str).unique())
     batch_codes = pd.Categorical(metadata["batch_id"].astype(str), categories=batch_values).codes
     n_batches = len(batch_values)
-    ntc_counts = np.zeros((n_batches, n_genes), dtype=np.float64)
+    ntc_counts = np.zeros((2, n_batches, n_genes), dtype=np.float64)
     weighted_batch_mass = np.zeros((n_groups, n_batches), dtype=np.float32)
     unweighted_batch_mass = np.zeros((n_groups, n_batches), dtype=np.float32)
     eligible_lookup = np.full(len(eligible_mask), -1, dtype=np.int64)
     eligible_lookup[np.flatnonzero(eligible_mask)] = np.arange(len(metadata))
+    ntc_split = np.full(len(metadata), -1, dtype=np.int8)
+    ntc_pool_records = []
+    for batch_id, batch in metadata[metadata["is_ntc"]].groupby("batch_id", sort=True, observed=True):
+        ordered = batch.sort_values("cell_id", kind="mergesort")
+        positions = ordered.index.to_numpy(dtype=np.int64)
+        assignments = np.arange(len(positions), dtype=np.int64) % 2
+        ntc_split[positions] = assignments
+        ntc_pool_records.append({
+            "batch_id": str(batch_id), "eligible_ntc_cells": len(positions),
+            "ntc_a_cells": int((assignments == 0).sum()), "ntc_b_cells": int((assignments == 1).sum()),
+        })
 
     for original_rows, matrix in source.iter_counts(
         eligible_mask, int(context.config["expression"]["row_chunk_size"])
@@ -154,12 +170,15 @@ def _build_dataset(
         block = matrix[:, feature_indices]
         ntc_local = metadata.loc[eligible_rows, "is_ntc"].to_numpy()
         if ntc_local.any():
-            _accumulate_rows(
-                ntc_counts,
-                batch_codes[eligible_rows][ntc_local],
-                block[ntc_local],
-                np.ones(int(ntc_local.sum()), dtype=np.float32),
-            )
+            for pool in (0, 1):
+                selected_ntc = ntc_local & ntc_split[eligible_rows].eq(pool) if isinstance(ntc_local, pd.Series) else ntc_local & (ntc_split[eligible_rows] == pool)
+                if selected_ntc.any():
+                    _accumulate_rows(
+                        ntc_counts[pool],
+                        batch_codes[eligible_rows][selected_ntc],
+                        block[selected_ntc],
+                        np.ones(int(selected_ntc.sum()), dtype=np.float32),
+                    )
         for method_id in METHOD_ORDER:
             group_ids = cell_groups[method_id][eligible_rows]
             selected = group_ids >= 0
@@ -178,21 +197,42 @@ def _build_dataset(
             np.add.at(weighted_batch_mass, (selected_groups, batch_codes[eligible_rows][selected]), selected_weights)
             np.add.at(unweighted_batch_mass, (selected_groups, batch_codes[eligible_rows][selected]), 1.0)
 
-    ntc_library = ntc_counts.sum(axis=1)
-    if np.any(ntc_library <= 0):
-        raise ValueError(f"{dataset_id}: at least one batch has zero NTC profile counts")
-    ntc_logcpm = np.log1p(ntc_counts * (1e6 / ntc_library)[:, None]).astype(np.float32)
-    weighted_profiles = _to_profiles(weighted_counts, weighted_batch_mass, ntc_logcpm)
-    unweighted_profiles = _to_profiles(unweighted_counts, unweighted_batch_mass, ntc_logcpm)
+    ntc_library = ntc_counts.sum(axis=2)
+    supported_batches = np.all(ntc_library > 0, axis=0)
+    ntc_logcpm = np.zeros_like(ntc_counts, dtype=np.float32)
+    for pool in (0, 1):
+        valid = ntc_library[pool] > 0
+        ntc_logcpm[pool, valid] = np.log1p(
+            ntc_counts[pool, valid] * (1e6 / ntc_library[pool, valid])[:, None]
+        ).astype(np.float32)
+    weighted_supported = ~np.any((weighted_batch_mass > 0) & (~supported_batches)[None, :], axis=1)
+    unweighted_supported = ~np.any((unweighted_batch_mass > 0) & (~supported_batches)[None, :], axis=1)
+    groups["ntc_batch_support"] = weighted_supported & unweighted_supported
+    weighted_profiles_ntc_a = _to_profiles(weighted_counts.copy(), weighted_batch_mass, ntc_logcpm[0])
+    weighted_profiles_ntc_b = _to_profiles(weighted_counts.copy(), weighted_batch_mass, ntc_logcpm[1])
+    unweighted_profiles_ntc_a = _to_profiles(unweighted_counts.copy(), unweighted_batch_mass, ntc_logcpm[0])
+    unweighted_profiles_ntc_b = _to_profiles(unweighted_counts.copy(), unweighted_batch_mass, ntc_logcpm[1])
 
     dataset_dir = context.stage_dir / "pseudobulk" / f"dataset_id={dataset_id}"
     dataset_dir.mkdir(parents=True, exist_ok=True)
-    weighted_path = dataset_dir / "weighted_profiles.npy"
-    unweighted_path = dataset_dir / "unweighted_profiles.npy"
-    _atomic_save_array(weighted_path, weighted_profiles)
-    _atomic_save_array(unweighted_path, unweighted_profiles)
+    profile_paths = {
+        "weighted_ntc_a": dataset_dir / "weighted_profiles_ntc_a.npy",
+        "weighted_ntc_b": dataset_dir / "weighted_profiles_ntc_b.npy",
+        "unweighted_ntc_a": dataset_dir / "unweighted_profiles_ntc_a.npy",
+        "unweighted_ntc_b": dataset_dir / "unweighted_profiles_ntc_b.npy",
+    }
+    for key, array in {
+        "weighted_ntc_a": weighted_profiles_ntc_a, "weighted_ntc_b": weighted_profiles_ntc_b,
+        "unweighted_ntc_a": unweighted_profiles_ntc_a, "unweighted_ntc_b": unweighted_profiles_ntc_b,
+    }.items():
+        _atomic_save_array(profile_paths[key], array)
     groups_path = dataset_dir / "group_manifest.parquet"
     atomic_write_parquet(groups, groups_path)
+    membership_path = dataset_dir / "group_cell_membership.parquet"
+    memberships = pd.concat(membership_records, ignore_index=True) if membership_records else pd.DataFrame(columns=["profile_row", "cell_id"])
+    atomic_write_parquet(memberships, membership_path)
+    ntc_split_path = dataset_dir / "ntc_split_manifest.parquet"
+    atomic_write_parquet(pd.DataFrame(ntc_pool_records), ntc_split_path)
     features_path = dataset_dir / "profile_features.parquet"
     atomic_write_parquet(
         pd.DataFrame({
@@ -211,16 +251,18 @@ def _build_dataset(
         "batches": batch_values,
         "min_cells_per_construct": min_construct,
         "weighting": "within_target_average_rank_percentile",
-        "reference": "batch_composition_matched_eligible_ntc_log1p_cpm",
+        "reference": "batch_composition_matched_disjoint_ntc_halves_log1p_cpm",
+        "ntc_split": "within_batch_cell_id_sort_then_alternating_50_50",
+        "symmetric_reference_swap": True,
         "profile_unit": "construct_id",
         "guide_set_source": settings.get("guide_set_source", "observed_eligible_cells"),
         "require_disjoint_guide_sets": bool(settings.get("require_disjoint_guide_sets", True)),
     })
-    return [weighted_path, unweighted_path, groups_path, features_path, metadata_path], {
+    return [*profile_paths.values(), groups_path, membership_path, ntc_split_path, features_path, metadata_path], {
         "groups": n_groups,
         "features": n_genes,
-        "weighted_profile_bytes": weighted_path.stat().st_size,
-        "unweighted_profile_bytes": unweighted_path.stat().st_size,
+        "profiles": 4,
+        "unsupported_profile_groups": int((~groups["ntc_batch_support"]).sum()),
     }
 
 

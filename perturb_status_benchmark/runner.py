@@ -15,34 +15,32 @@ from .context import StageContext
 from .manifest import RunManifest
 from .publish import publish
 from .resources import PeakMemoryMonitor
-from .stages import agreement, coverage, effect, embedding, engagement, figures, harmonize, pseudobulk, report, reproducibility, resource_metrics
+from .stages import agreement, coverage, effect, embedding, harmonize, pseudobulk, report, reproducibility, resource_metrics, target_expression
 
 
 STAGES = {
     "validate": harmonize.run,
     "coverage": coverage.run,
-    "engagement": engagement.run,
+    "target_expression": target_expression.run,
     "embedding": embedding.run,
     "effect": effect.run,
     "pseudobulk": pseudobulk.run,
     "reproducibility": reproducibility.run,
     "agreement": agreement.run,
     "resources": resource_metrics.run,
-    "figures": figures.run,
     "report": report.run,
 }
 DEPENDENCIES = {
     "validate": [],
     "coverage": ["validate"],
-    "engagement": ["validate"],
+    "target_expression": ["validate"],
     "embedding": ["validate"],
     "effect": ["validate", "embedding"],
     "pseudobulk": ["validate", "embedding"],
     "reproducibility": ["pseudobulk"],
     "agreement": ["validate"],
     "resources": ["validate"],
-    "figures": ["coverage", "engagement", "effect", "reproducibility", "agreement", "resources"],
-    "report": ["coverage", "engagement", "effect", "reproducibility", "agreement", "resources", "figures"],
+    "report": ["coverage", "target_expression", "effect", "reproducibility", "agreement", "resources"],
 }
 
 

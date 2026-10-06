@@ -1,0 +1,217 @@
+protocol: perturbation_status_estimation_benchmark
+project_root: /data/yunzliu/perturbation_status_estimation_benchmark
+output_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark
+work_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark/work
+log_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark/logs
+cohort:
+  eligible_assignment_structures:
+  - single_guide
+  - concordant_construct
+  min_cells_per_perturbation: 20
+  min_cells_per_reagent: 10
+  min_cells_per_construct: 10
+statistics:
+  bootstrap_resamples: 1000
+  seed: 20260913
+direct_expression:
+  cell_table: 07_benchmark/inputs/direct_expression_cells.tsv.gz
+  definition: direction_adjusted_log1p_cp10k_target_gene_expression
+  crispri_crisprko_direction: -1
+  crispra_direction: 1
+  multi_gene_aggregation: mean_resolved_components
+  percentile_ties: average_rank
+  score_quantiles: 5
+resources:
+  max_workers: 16
+  numeric_threads_per_worker: 1
+  memory_soft_limit_gib: 96
+  memory_hard_limit_gib: 120
+datasets:
+  papalexi2021:
+    modality: CRISPRko
+    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/papalexi2021/perturbation_adata.h5ad
+    metadata:
+      cell_id: cell_id
+      target: target_label
+      control: is_ntc
+      assignment: assignment_structure
+      batch: batch_id
+      reagent: guide_id
+      construct: assigned_construct
+    perturbation_delimiter: null
+    methods:
+      mixscape:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/papalexi2021_pooled/merged/mixscape_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscape_class_p_ko
+        status_column: mixscape_class.global
+        active_status: KO
+        inactive_status: NP
+      mixscale:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/papalexi2021_pooled/merged/mixscale_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscale_score
+        availability:
+          mode: rds_shards
+          glob: 04_mixscale/sharding/outputs/papalexi2021_pooled/shards/shard_*/mixscale_tool.rds
+      ps:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/papalexi2021/scalable/ps_metadata.tsv
+        target_column: target_label
+        score_column: ps_score
+        status_column: ps_status
+        scorable_status: modeled
+      target_expression:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/papalexi2021/target_expression_baseline.tsv
+        target_column: target_label
+        score_column: baseline_score
+        status_column: baseline_status
+        scorable_status:
+        - engaged
+        - not_engaged
+    expression:
+      feature_mode: direct
+    reproducibility:
+      enabled: true
+  norman2019:
+    modality: CRISPRa
+    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/norman2019/perturbation_adata.h5ad
+    metadata:
+      cell_id: cell_id
+      target: target_label
+      control: is_ntc
+      assignment: assignment_structure
+      batch: batch_id
+      reagent: guide_id
+      construct: assigned_construct
+    perturbation_delimiter: +
+    methods:
+      mixscape:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/norman2019_pooled/merged/mixscape_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscape_class_p_crispra
+        status_column: mixscape_class.global
+        active_status: CRISPRa
+        inactive_status: NP
+      mixscale:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/norman2019_pooled/merged/mixscale_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscale_score
+        availability:
+          mode: rds_shards
+          glob: 04_mixscale/sharding/outputs/norman2019_pooled/shards/shard_*/mixscale_tool.rds
+      ps:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/norman2019/scalable/ps_metadata.tsv
+        target_column: target_label
+        score_column: ps_score
+        status_column: ps_status
+        scorable_status: modeled
+      target_expression:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/norman2019/target_expression_baseline.tsv
+        target_column: target_label
+        score_column: baseline_score
+        status_column: baseline_status
+        scorable_status:
+        - engaged
+        - not_engaged
+    expression:
+      feature_mode: direct
+    reproducibility:
+      enabled: false
+      status: not_applicable_shared_targeting_guide_position_constructs
+      reason: Positional constructs share the targeting guide, and multi-gene perturbations
+        lack independent replicate constructs.
+  replogle2022:
+    modality: CRISPRi
+    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/replogle2022/perturbation_adata.h5ad
+    metadata:
+      cell_id: cell_id
+      target: target_label
+      control: is_ntc
+      assignment: assignment_structure
+      batch: batch_id
+      reagent: guide_id
+      construct: assigned_construct
+    perturbation_delimiter: null
+    methods:
+      mixscape:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/replogle2022_pooled/merged/mixscape_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscape_class_p_crispri
+        status_column: mixscape_class.global
+        active_status: CRISPRi
+        inactive_status: NP
+      mixscale:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/replogle2022_pooled/merged/mixscale_metadata.tsv.gz
+        target_column: target_label
+        score_column: mixscale_score
+        availability:
+          mode: rds_shards
+          glob: 04_mixscale/sharding/outputs/replogle2022_pooled/shards/shard_*/mixscale_tool.rds
+      ps:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/replogle2022/scalable/ps_metadata.tsv
+        target_column: target_label
+        score_column: ps_score
+        status_column: ps_status
+        scorable_status: modeled
+      target_expression:
+        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/replogle2022/target_expression_baseline.tsv
+        target_column: target_label
+        score_column: baseline_score
+        status_column: baseline_status
+        scorable_status:
+        - engaged
+        - not_engaged
+    expression:
+      feature_mode: usa_sa
+      target_feature_map: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/resources/replogle2022_gene_map.tsv
+    reproducibility:
+      enabled: true
+      require_two_observed_guides_sensitivity: true
+expression:
+  counts_layer: counts
+  hvg_count: 2000
+  min_ntc_detection_fraction: 0.01
+  n_pcs: 50
+  pca_max_cells_per_target: 20
+  pca_max_ntc_cells: 5000
+  row_chunk_size: 512
+  transform_chunk_size: 4096
+  seed: 20260913
+energy_distance:
+  max_target_cells: 256
+  ntc_cells: 512
+  seed: 20260913
+pseudobulk:
+  min_ntc_detection_fraction: 0.01
+  profile_unit: construct_id
+  guide_set_source: observed_eligible_cells
+  require_disjoint_guide_sets: true
+  ntc_split: within_batch_cell_id_sort_then_alternating_50_50
+  symmetric_reference_swap: true
+  require_disjoint_targeted_cells: true
+resource_inputs:
+  mixscale_manifest: 04_mixscale/results/mixscale_run_manifest.tsv
+  ps_manifest: 05_ps/results/ps_run_manifest.tsv
+  target_expression_manifest: 06_target_expression_baseline/results/baseline_run_manifest.tsv
+  datasets:
+    papalexi2021:
+      shared_preprocessing_events: 03_mixscape/logs/papalexi2021/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/papalexi2021_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 21
+      mixscape_peak_worker_rss_gib: 2.09
+      mixscape_shards: 4
+      mixscape_workers: 4
+    norman2019:
+      shared_preprocessing_events: 03_mixscape/logs/norman2019/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/norman2019_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 509
+      mixscape_peak_worker_rss_gib: 7.16
+      mixscape_shards: 8
+      mixscape_workers: 6
+    replogle2022:
+      shared_preprocessing_events: 03_mixscape/logs/replogle2022_sa/stage_resources.jsonl
+      shard_build_time: 03_mixscape/sharding/outputs/replogle2022_pooled/build_resources/protected_run.time.txt
+      mixscape_wall_seconds: 3840
+      mixscape_peak_worker_rss_gib: 10.16
+      mixscape_shards: 16
+      mixscape_workers: 6
