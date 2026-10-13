@@ -6,6 +6,7 @@ import glob
 from pathlib import Path
 import re
 import subprocess
+import shutil
 from typing import Any
 
 import numpy as np
@@ -191,8 +192,10 @@ def _mixscale_targets(
     if not output.exists():
         output.parent.mkdir(parents=True, exist_ok=True)
         script = Path(__file__).parents[1] / "r" / "export_mixscale_targets.R"
-        rscript = config["project_root"] / "environments/mixscale/env/bin/Rscript"
-        subprocess.run([str(rscript), str(script), str(output), *map(str, inputs)], check=True)
+        rscript = shutil.which("Rscript")
+        if rscript is None:
+            raise FileNotFoundError("Required executable is not on PATH: Rscript")
+        subprocess.run([rscript, str(script), str(output), *map(str, inputs)], check=True)
     targets = pd.read_csv(output, sep="\t", dtype=str)["target_id"]
     return set(targets)
 

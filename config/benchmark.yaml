@@ -1,8 +1,8 @@
 protocol: perturbation_status_estimation_benchmark
-project_root: /data/yunzliu/perturbation_status_estimation_benchmark
-output_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark
-work_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark/work
-log_root: /data/yunzliu/perturbation_status_estimation_benchmark/07_benchmark/logs
+project_root: ..
+output_root: runtime/results
+work_root: runtime/work
+log_root: runtime/logs
 cohort:
   eligible_assignment_structures:
   - single_guide
@@ -29,7 +29,7 @@ resources:
 datasets:
   papalexi2021:
     modality: CRISPRko
-    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/papalexi2021/perturbation_adata.h5ad
+    h5ad: runtime/source/01_standardize_inputs/outputs/papalexi2021/perturbation_adata.h5ad
     metadata:
       cell_id: cell_id
       target: target_label
@@ -41,27 +41,27 @@ datasets:
     perturbation_delimiter: null
     methods:
       mixscape:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/papalexi2021_pooled/merged/mixscape_metadata.tsv.gz
+        path: runtime/source/03_mixscape/sharding/outputs/papalexi2021_pooled/merged/mixscape_metadata.tsv.gz
         target_column: target_label
         score_column: mixscape_class_p_ko
         status_column: mixscape_class.global
         active_status: KO
         inactive_status: NP
       mixscale:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/papalexi2021_pooled/merged/mixscale_metadata.tsv.gz
+        path: runtime/source/04_mixscale/sharding/outputs/papalexi2021_pooled/merged/mixscale_metadata.tsv.gz
         target_column: target_label
         score_column: mixscale_score
         availability:
           mode: rds_shards
           glob: 04_mixscale/sharding/outputs/papalexi2021_pooled/shards/shard_*/mixscale_tool.rds
       ps:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/papalexi2021/scalable/ps_metadata.tsv
+        path: runtime/source/05_ps/outputs/papalexi2021/scalable/ps_metadata.tsv
         target_column: target_label
         score_column: ps_score
         status_column: ps_status
         scorable_status: modeled
       target_expression:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/papalexi2021/target_expression_baseline.tsv
+        path: runtime/source/06_target_expression_baseline/outputs/papalexi2021/target_expression_baseline.tsv
         target_column: target_label
         score_column: baseline_score
         status_column: baseline_status
@@ -74,7 +74,7 @@ datasets:
       enabled: true
   norman2019:
     modality: CRISPRa
-    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/norman2019/perturbation_adata.h5ad
+    h5ad: runtime/source/01_standardize_inputs/outputs/norman2019/perturbation_adata.h5ad
     metadata:
       cell_id: cell_id
       target: target_label
@@ -86,27 +86,27 @@ datasets:
     perturbation_delimiter: +
     methods:
       mixscape:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/norman2019_pooled/merged/mixscape_metadata.tsv.gz
+        path: runtime/source/03_mixscape/sharding/outputs/norman2019_pooled/merged/mixscape_metadata.tsv.gz
         target_column: target_label
         score_column: mixscape_class_p_crispra
         status_column: mixscape_class.global
         active_status: CRISPRa
         inactive_status: NP
       mixscale:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/norman2019_pooled/merged/mixscale_metadata.tsv.gz
+        path: runtime/source/04_mixscale/sharding/outputs/norman2019_pooled/merged/mixscale_metadata.tsv.gz
         target_column: target_label
         score_column: mixscale_score
         availability:
           mode: rds_shards
           glob: 04_mixscale/sharding/outputs/norman2019_pooled/shards/shard_*/mixscale_tool.rds
       ps:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/norman2019/scalable/ps_metadata.tsv
+        path: runtime/source/05_ps/outputs/norman2019/scalable/ps_metadata.tsv
         target_column: target_label
         score_column: ps_score
         status_column: ps_status
         scorable_status: modeled
       target_expression:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/norman2019/target_expression_baseline.tsv
+        path: runtime/source/06_target_expression_baseline/outputs/norman2019/target_expression_baseline.tsv
         target_column: target_label
         score_column: baseline_score
         status_column: baseline_status
@@ -122,7 +122,7 @@ datasets:
         lack independent replicate constructs.
   replogle2022:
     modality: CRISPRi
-    h5ad: /data/yunzliu/perturbation_status_estimation_benchmark/01_standardize_inputs/outputs/replogle2022/perturbation_adata.h5ad
+    h5ad: runtime/source/01_standardize_inputs/outputs/replogle2022/perturbation_adata.h5ad
     metadata:
       cell_id: cell_id
       target: target_label
@@ -134,27 +134,27 @@ datasets:
     perturbation_delimiter: null
     methods:
       mixscape:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/03_mixscape/sharding/outputs/replogle2022_pooled/merged/mixscape_metadata.tsv.gz
+        path: runtime/source/03_mixscape/sharding/outputs/replogle2022_pooled/merged/mixscape_metadata.tsv.gz
         target_column: target_label
         score_column: mixscape_class_p_crispri
         status_column: mixscape_class.global
         active_status: CRISPRi
         inactive_status: NP
       mixscale:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/04_mixscale/sharding/outputs/replogle2022_pooled/merged/mixscale_metadata.tsv.gz
+        path: runtime/source/04_mixscale/sharding/outputs/replogle2022_pooled/merged/mixscale_metadata.tsv.gz
         target_column: target_label
         score_column: mixscale_score
         availability:
           mode: rds_shards
           glob: 04_mixscale/sharding/outputs/replogle2022_pooled/shards/shard_*/mixscale_tool.rds
       ps:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/05_ps/outputs/replogle2022/scalable/ps_metadata.tsv
+        path: runtime/source/05_ps/outputs/replogle2022/scalable/ps_metadata.tsv
         target_column: target_label
         score_column: ps_score
         status_column: ps_status
         scorable_status: modeled
       target_expression:
-        path: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/outputs/replogle2022/target_expression_baseline.tsv
+        path: runtime/source/06_target_expression_baseline/outputs/replogle2022/target_expression_baseline.tsv
         target_column: target_label
         score_column: baseline_score
         status_column: baseline_status
@@ -163,7 +163,7 @@ datasets:
         - not_engaged
     expression:
       feature_mode: usa_sa
-      target_feature_map: /data/yunzliu/perturbation_status_estimation_benchmark/06_target_expression_baseline/resources/replogle2022_gene_map.tsv
+      target_feature_map: runtime/source/06_target_expression_baseline/resources/replogle2022_gene_map.tsv
     reproducibility:
       enabled: true
       require_two_observed_guides_sensitivity: true

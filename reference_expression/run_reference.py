@@ -9,6 +9,7 @@ import json
 import os
 import re
 import subprocess
+import shutil
 import time
 from pathlib import Path
 
@@ -37,19 +38,18 @@ def execute(command: list[str], log: Path) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--project-root", type=Path, required=True)
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    environment_prefix = args.project_root / "environments/mixscape/env"
-    os.environ["R_LIBS_USER"] = str(environment_prefix / "lib/R/library")
-    os.environ["PATH"] = f"{environment_prefix / 'bin'}:{os.environ.get('PATH', '')}"
+    rscript = shutil.which("Rscript")
+    if rscript is None:
+        raise FileNotFoundError("Required executable is not on PATH: Rscript")
     output = Path(config["output_dir"])
     if output.exists() and any(output.iterdir()):
         raise RuntimeError(f"Output directory is not empty: {output}")
     output.mkdir(parents=True, exist_ok=True)
     started = time.time()
     commands = [([
-        str(args.project_root / "environments/mixscape/env/bin/Rscript"),
+        rscript,
         str(ROOT / "reference_expression/run_shard.R"),
         "--config", str(args.config.resolve()), "--shard", str(shard)
     ], output / "logs" / f"shard_{shard:03d}.log") for shard in range(1, int(config["shards"]) + 1)]

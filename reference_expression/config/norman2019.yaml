@@ -1,0 +1,15 @@
+module: M06
+dataset: norman2019
+perturbation_mode: CRISPRa
+checkpoint_dir: runtime/source/03_mixscape/sharding/outputs/norman2019_pooled/checkpoints
+target_manifest: runtime/source/03_mixscape/sharding/outputs/norman2019_pooled/target_manifest.tsv
+metadata: runtime/source/03_mixscape/inputs/norman2019/metadata.tsv.gz
+output_dir: runtime/source/06_target_expression_baseline/outputs/norman2019
+shards: 8
+max_workers: 6
+label_field: gene
+ntc_label: non-targeting
+expression_assay: RNA
+expression_layer: data
+neighbor_tool: CalcPerturbSig.RNA.pca
+control_quantile: 0.95

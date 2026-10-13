@@ -1,0 +1,17 @@
+module: M06
+dataset: papalexi2021
+perturbation_mode: CRISPRko
+checkpoint_dir: runtime/source/03_mixscape/sharding/outputs/papalexi2021_pooled/checkpoints
+target_manifest: runtime/source/03_mixscape/sharding/outputs/papalexi2021_pooled/target_manifest.tsv
+metadata: runtime/source/03_mixscape/inputs/papalexi2021/metadata.tsv.gz
+output_dir: runtime/source/06_target_expression_baseline/outputs/papalexi2021
+shards: 4
+max_workers: 4
+label_field: gene
+ntc_label: non-targeting
+expression_assay: RNA
+expression_layer: data
+neighbor_tool: CalcPerturbSig.RNA.pca
+control_quantile: 0.95
+target_aliases:
+  PDL1: CD274

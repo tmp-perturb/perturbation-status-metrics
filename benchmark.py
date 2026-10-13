@@ -134,10 +134,12 @@ def write_resource_inputs(
 
 
 def build_target_expression_reference(
-    spec: dict[str, Any], shared_root: Path, destination: Path, project: Path
+    spec: dict[str, Any], shared_root: Path, destination: Path
 ) -> tuple[Path, dict[str, Any]]:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    config = yaml.safe_load(Path(spec["target_expression_config"]).read_text(encoding="utf-8"))
+    config = yaml.safe_load(
+        (HERE / "reference_expression" / "config" / f'{spec["dataset"]}.yaml').read_text(encoding="utf-8")
+    )
     config.update({
         "dataset": spec["dataset"],
         "checkpoint_dir": str(shared_root / "shards" / "checkpoints"),
@@ -151,7 +153,7 @@ def build_target_expression_reference(
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     subprocess.run([
         sys.executable, str(HERE / "reference_expression" / "run_reference.py"),
-        "--config", str(config_path), "--project-root", str(project),
+        "--config", str(config_path),
     ], check=True)
     result = destination / "target_expression_reference.tsv"
     if not result.is_file():
@@ -268,15 +270,10 @@ def main() -> None:
             safe_extract(shared_bundles[parent], destination)
             shared[manifest["dataset"]] = (destination / "shared", manifest)
 
-        first_spec = next(iter(datasets.values()))[0]
-        project = Path(first_spec["project_root"])
         sys.path.insert(0, str(HERE))
         from perturb_status_benchmark.config import load_config
         config = serializable(load_config(HERE / "config" / "benchmark.yaml"))
-        # Keep the frozen project root because harmonization intentionally uses
-        # its validated Mixscale R helper and environment. All mutable run/output
-        # paths and all data/method inputs below are absolute temporary paths.
-        config["project_root"] = str(project)
+        config["project_root"] = str(HERE)
         config["output_root"] = str(root / "published")
         config["work_root"] = str(root / "work")
         config["log_root"] = str(root / "logs")
@@ -296,7 +293,7 @@ def main() -> None:
                         "mode": "rds_shards", "glob": str(aux_dir / "mixscale" / "shards" / "shard_*" / "mixscale_tool.rds")
                     }
             reference, reference_manifest = build_target_expression_reference(
-                datasets[dataset][0], shared[dataset][0], root / "target_expression_reference" / dataset, project
+                datasets[dataset][0], shared[dataset][0], root / "target_expression_reference" / dataset
             )
             target_expression_records[dataset] = reference_manifest
             config["datasets"][dataset]["methods"]["target_expression"] = {

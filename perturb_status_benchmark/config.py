@@ -20,7 +20,11 @@ def load_config(path: Path) -> dict[str, Any]:
     for key in ("protocol", "project_root", "datasets", "cohort", "resources"):
         if key not in config:
             raise ValueError(f"Missing required config key: {key}")
-    project_root = Path(config["project_root"]).resolve()
+    project_root = Path(config["project_root"])
+    if not project_root.is_absolute():
+        project_root = (path.resolve().parent / project_root).resolve()
+    else:
+        project_root = project_root.resolve()
     if not project_root.is_dir():
         raise FileNotFoundError(f"project_root does not exist: {project_root}")
     config["project_root"] = project_root

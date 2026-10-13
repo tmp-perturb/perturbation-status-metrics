@@ -1,0 +1,16 @@
+module: M06
+dataset: replogle2022
+perturbation_mode: CRISPRi
+checkpoint_dir: runtime/source/03_mixscape/sharding/outputs/replogle2022_pooled/checkpoints
+target_manifest: runtime/source/03_mixscape/sharding/outputs/replogle2022_pooled/target_manifest.tsv
+metadata: runtime/source/03_mixscape/inputs/replogle2022_gene_sa/metadata.tsv.gz
+feature_map: runtime/source/06_target_expression_baseline/resources/replogle2022_gene_map.tsv
+output_dir: runtime/source/06_target_expression_baseline/outputs/replogle2022
+shards: 16
+max_workers: 6
+label_field: gene
+ntc_label: non-targeting
+expression_assay: RNA
+expression_layer: data
+neighbor_tool: CalcPerturbSig.RNA.pca
+control_quantile: 0.95
